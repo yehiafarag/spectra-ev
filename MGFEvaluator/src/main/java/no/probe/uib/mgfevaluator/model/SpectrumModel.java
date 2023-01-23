@@ -1,6 +1,7 @@
 package no.probe.uib.mgfevaluator.model;
 
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 
 /**
@@ -51,6 +52,9 @@ public class SpectrumModel implements Comparable<SpectrumModel> {
     private boolean identified =false;
     private double avgSequenceLength;
      private double avgSearchCharge;
+     private Set<String>searchEnginesList;
+     private Set<PeptideModel>peptides;
+     
 
     public double getAvgSearchCharge() {
         return avgSearchCharge;
@@ -316,5 +320,21 @@ public class SpectrumModel implements Comparable<SpectrumModel> {
 
     public void setAvgDynamicRange(double avgDynamicRange) {
         this.avgDynamicRange = avgDynamicRange;
+    }
+
+    public Set<String> getSearchEnginesList() {
+        return searchEnginesList;
+    }
+
+    public void setSearchEnginesList(Set<String> searchEnginesList) {
+        this.searchEnginesList = searchEnginesList;
+    }
+
+    public Set<PeptideModel> getPeptides() {
+        return peptides;
+    }
+
+    public void setPeptides(Set<PeptideModel> peptides) {
+        this.peptides = peptides;
     }
 }
