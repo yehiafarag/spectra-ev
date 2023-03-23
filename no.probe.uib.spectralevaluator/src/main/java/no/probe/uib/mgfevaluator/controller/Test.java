@@ -4,83 +4,85 @@
  */
 package no.probe.uib.mgfevaluator.controller;
 
-import java.io.BufferedOutputStream;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.time.LocalDateTime;
-import org.apache.commons.net.ftp.FTPClient;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import no.probe.uib.mgfevaluator.model.DatasetInfo;
+import no.probe.uib.mgfevaluator.processes.UpdatedDataProcessor;
+import no.probe.uib.mgfevaluator.processes.handlers.DataStoreHandler;
 
 /**
  *
  * @author yfa041
  */
 public class Test {
-        /**
+
+    /**
      * @param args the command line arguments
      */
     public static void main(String args[]) {
-        
-        System.out.println(LocalDateTime.now().toLocalDate());
-        
-//    DecisionTree tree = new DecisionTree();
-//DecisionTreeTest test= new DecisionTreeTest();
-//test.testBreastCancer();
-        String server = "ftp.pride.ebi.ac.uk";
-        int port = 21;
-        String user = "anonymous";
-        String pass = "";
- 
-        FTPClient ftpClient = new FTPClient();
-        try {
- 
-            ftpClient.connect(server, port);
-            ftpClient.login(user, pass);
-//            ftpClient.enterLocalPassiveMode();
-//            ftpClient.setFileType(FTP.STREAM_TRANSFER_MODE);
- 
-            // APPROACH #1: using retrieveFile(String, OutputStream)
-            String remoteFile1 = "/pride/data/archive/2021/04/PXD008650/txt_MiFO170522_170727.zip";
-            File downloadFile1 = new File("D:/test.zip");
-            OutputStream outputStream1 = new BufferedOutputStream(new FileOutputStream(downloadFile1));
-            boolean success = ftpClient.retrieveFile(remoteFile1, outputStream1);
-            outputStream1.close();
- 
-            if (success) {
-                System.out.println("File #1 has been downloaded successfully.");
-            }
- 
-//            // APPROACH #2: using InputStream retrieveFileStream(String)
-//            String remoteFile2 = "/test/song.mp3";
-//            File downloadFile2 = new File("D:/Downloads/song.mp3");
-//            OutputStream outputStream2 = new BufferedOutputStream(new FileOutputStream(downloadFile2));
-//            InputStream inputStream = ftpClient.retrieveFileStream(remoteFile2);
-//            byte[] bytesArray = new byte[4096];
-//            int bytesRead = -1;
-//            while ((bytesRead = inputStream.read(bytesArray)) != -1) {
-//                outputStream2.write(bytesArray, 0, bytesRead);
-//            }
-// 
-//            success = ftpClient.completePendingCommand();
-//            if (success) {
-//                System.out.println("File #2 has been downloaded successfully.");
-//            }
-//            outputStream2.close();
-//            inputStream.close();
- 
-        } catch (IOException ex) {
-            System.out.println("Error: " + ex.getMessage());
-            ex.printStackTrace();
-        } finally {
-            try {
-                if (ftpClient.isConnected()) {
-                    ftpClient.logout();
-                    ftpClient.disconnect();
-                }
-            } catch (IOException ex) {
-                ex.printStackTrace();
-            }
+        DataStoreHandler dsh = new DataStoreHandler();
+        UpdatedDataProcessor updatedDataProcessor = new UpdatedDataProcessor();
+        System.out.println("start storing data :-D ");
+        Set<DatasetInfo> dsSet = dsh.loadDatasetInformation();
+        Map<DatasetInfo, DatasetInfo[]> clusterNodesMap = new HashMap<>();
+        Map<String, DatasetInfo> accObjectMap = new HashMap<>();
+        Set<String> toremoveAcc = new HashSet<>();
+        for (DatasetInfo ds : dsSet) {
+            accObjectMap.put(ds.getAccession(), ds);
         }
+        Map<String, HashSet<String>> toReplaceDs = new HashMap<>();
+        for (String acc : accObjectMap.keySet()) {
+            if (acc.contains("-")) {
+                String ds1 = acc.split("-")[0];
+                String ds2 = acc.split("-")[1];
+//                clusterNodesMap.put(accObjectMap.get(acc), new DatasetInfo[]{accObjectMap.get(ds1),accObjectMap.get(ds2)});      
+                if (accObjectMap.get(acc).getDt_acc() > accObjectMap.get(ds1).getDt_acc()) {
+                    if (!toReplaceDs.containsKey(ds1)) {
+                        toReplaceDs.put(ds1, new HashSet<>());
+                    }
+                    toReplaceDs.get(ds1).add(acc);
+                    toremoveAcc.add(ds1);
+                } else if (accObjectMap.get(acc).getDt_acc() > accObjectMap.get(ds2).getDt_acc()) {
+                    if (!toReplaceDs.containsKey(ds2)) {
+                        toReplaceDs.put(ds2, new HashSet<>());
+                    }
+                    toReplaceDs.get(ds2).add(acc);
+                    toremoveAcc.add(ds2);
+                } else {
+                    toremoveAcc.add(acc);
+                }
+            }
+            
+        }
+        
+        for (String replaceAcc : toReplaceDs.keySet()) {
+            double acc = accObjectMap.get(replaceAcc).getDt_acc();
+            double topAcc = Double.MIN_VALUE;
+            String selected = "";
+            for (String replacment : toReplaceDs.get(replaceAcc)) {
+                double acc2 = accObjectMap.get(replacment).getDt_acc();
+                if (acc2 > topAcc) {
+                    topAcc = acc2;
+                    selected = replacment;
+                }
+            }
+            
+            if (!selected.isBlank()) {
+                for (String replacment : toReplaceDs.get(replaceAcc)) {
+                    if (!replacment.equalsIgnoreCase(selected)) {
+                        toremoveAcc.add(replacment);
+                    }
+                }
+                toremoveAcc.add(replaceAcc);
+            }
+            
+        }
+        System.out.println("to remove " + toremoveAcc.size() + " --> " + accObjectMap.size() + "   " + accObjectMap.keySet().containsAll(toremoveAcc));
+        //add flag for unused datafiles
+        dsh.flagUnusedDatasets(toremoveAcc);
+        
     }
+    
 }

@@ -6,10 +6,11 @@ package no.probe.uib.mgfevaluator.gui;
 
 import java.awt.Color;
 import java.io.File;
-import java.util.Date;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -18,9 +19,13 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import javax.swing.JFileChooser;
+import javax.swing.RowSorter;
+import javax.swing.SortOrder;
 import javax.swing.filechooser.FileFilter;
 import javax.swing.table.DefaultTableModel;
-import no.uib.jexpress_modularized.core.dataset.Dataset;
+import javax.swing.table.TableModel;
+import javax.swing.table.TableRowSorter;
+import no.probe.uib.mgfevaluator.model.DatasetInfo;
 import no.uib.jsparklines.extra.NimbusCheckBoxRenderer;
 
 /**
@@ -204,17 +209,17 @@ public abstract class MainGUI extends javax.swing.JFrame {
         jTable1.setAutoCreateRowSorter(true);
         jTable1.setModel(new javax.swing.table.DefaultTableModel(
             new Object [][] {
-                {null, null, null, null, null, null}
+                {null, null, null, null, null, null, null, null}
             },
             new String [] {
-                "", "Dataset", "#Spectra", "Year", "Traning data", "Sample data"
+                "", "Dataset", "#Spectra", "#Id", "#UnId", "Year", "Traning data", "Sample data"
             }
         ) {
             Class[] types = new Class [] {
-                java.lang.Integer.class, java.lang.String.class, java.lang.Integer.class, java.lang.Integer.class, java.lang.Boolean.class, java.lang.Boolean.class
+                java.lang.Integer.class, java.lang.String.class, java.lang.Integer.class, java.lang.Integer.class, java.lang.Integer.class, java.lang.Integer.class, java.lang.Boolean.class, java.lang.Boolean.class
             };
             boolean[] canEdit = new boolean [] {
-                false, false, false, false, true, true
+                false, false, false, false, false, false, false, true
             };
 
             public Class getColumnClass(int columnIndex) {
@@ -248,6 +253,12 @@ public abstract class MainGUI extends javax.swing.JFrame {
             jTable1.getColumnModel().getColumn(5).setMinWidth(100);
             jTable1.getColumnModel().getColumn(5).setPreferredWidth(100);
             jTable1.getColumnModel().getColumn(5).setMaxWidth(100);
+            jTable1.getColumnModel().getColumn(6).setMinWidth(100);
+            jTable1.getColumnModel().getColumn(6).setPreferredWidth(100);
+            jTable1.getColumnModel().getColumn(6).setMaxWidth(100);
+            jTable1.getColumnModel().getColumn(7).setMinWidth(100);
+            jTable1.getColumnModel().getColumn(7).setPreferredWidth(100);
+            jTable1.getColumnModel().getColumn(7).setMaxWidth(100);
         }
 
         jButton7.setText("Run");
@@ -699,7 +710,7 @@ public abstract class MainGUI extends javax.swing.JFrame {
 
     }
 
-    public void updateDatasetTable(Map<Integer, Dataset> traningDatasetMap) {
+    public void updateDatasetTable(Set<DatasetInfo> traningDatasetMap) {
         jTable1.setEnabled(true);
         jTable1.setVisible(true);
         DefaultTableModel dm = (DefaultTableModel) jTable1.getModel();
@@ -708,22 +719,28 @@ public abstract class MainGUI extends javax.swing.JFrame {
         for (int i = rowCount - 1; i >= 0; i--) {
             dm.removeRow(i);
         }
-        Map<String, Dataset> filteredDatasets = new TreeMap<>();
-        for (Dataset ds : traningDatasetMap.values()) {
-            String dsName = ds.getName().split("__")[0];
-
-            filteredDatasets.put(dsName.toUpperCase(), ds);
+        Map<String, String> filteredDatasets = new TreeMap<>();
+        for (DatasetInfo ds : traningDatasetMap) {
+            int index = ds.getIndex();
+            String dsName = ds.getAccession();
+            int year = ds.getYear();
+            int totalSpec = ds.getSpect_total_num();
+            int idnum = ds.getIdent_num();
+            int unid = ds.getUn_ident_num();  
+            dm.addRow(new Object[]{index, dsName, totalSpec,idnum,unid, year, true, false});
         }
-        int i = 1;
-        for (String str : filteredDatasets.keySet()) {
-            Dataset ds = filteredDatasets.get(str);
-            int year = 0;
-            if (ds.getName().split("__").length == 3) {
-                String date = ds.getName().split("__")[2].replace(".txt", "");
-                year = Integer.parseInt(date.split("-")[0]);
-            }
+      
+        TableRowSorter<TableModel> sorter = new TableRowSorter<>(jTable1.getModel());
+        jTable1.setRowSorter(sorter);
+        List<RowSorter.SortKey> sortKeys = new ArrayList<>();
 
-            dm.addRow(new Object[]{i++, str, ds.getDataLength(), year, true, false});
+        int columnIndexToSort = 3;
+        sortKeys.add(new RowSorter.SortKey(columnIndexToSort, SortOrder.DESCENDING));
+        sorter.setSortKeys(sortKeys);
+        sorter.sort();
+        for (int k = 0; k < dm.getRowCount(); k++) {
+            int row = sorter.convertRowIndexToModel(k);
+            dm.setValueAt((k + 1) + "", row, 0);
         }
         jButton7.setEnabled(!traningDatasetMap.isEmpty());
         jButton5.setEnabled(jButton7.isEnabled());

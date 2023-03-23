@@ -18,6 +18,9 @@ public class TraningDataset {
     private String datasetName;
     private double[][] doubleData;
     private String selectedFeaturesKey;
+    private double dtAccurcy;
+    private double rtAccurcy;
+    private double rtR2;
 
     public String getSelectedFeaturesKey() {
         return selectedFeaturesKey;
@@ -83,5 +86,29 @@ public class TraningDataset {
 
     public void setGroupType(String[] groupType) {
         this.groupType = groupType;
+    }
+
+    public double getDtAccurcy() {
+        return dtAccurcy;
+    }
+
+    public void setDtAccurcy(double dtAccurcy) {
+        this.dtAccurcy = dtAccurcy;
+    }
+
+    public double getRtAccurcy() {
+        return rtAccurcy;
+    }
+
+    public void setRtAccurcy(double rtAccurcy) {
+        this.rtAccurcy = rtAccurcy;
+    }
+
+    public double getRtR2() {
+        return rtR2;
+    }
+
+    public void setRtR2(double rtR2) {
+        this.rtR2 = rtR2;
     }
 }

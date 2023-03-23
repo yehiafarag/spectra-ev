@@ -26,13 +26,20 @@ import no.probe.uib.mgfevaluator.processes.handlers.CMSFileHandler;
 import no.probe.uib.mgfevaluator.processes.handlers.CustomizedmzIdentMLIdFileReader;
 import no.probe.uib.mgfevaluator.processes.handlers.MzIdFileHandler;
 import no.probe.uib.mgfevaluator.processes.handlers.UpdatedCmsFileWriter;
+import no.probe.uib.spectraev.ml.MassSpectrometryData;
 import no.uib.jexpress_modularized.core.dataset.Dataset;
 import no.uib.jexpress_modularized.core.dataset.Group;
 import no.uib.jexpress_modularized.pca.computation.PcaCompute;
 import no.uib.jexpress_modularized.pca.computation.PcaResults;
 import org.apache.commons.math3.stat.correlation.PearsonsCorrelation;
+import smile.classification.DecisionTree;
 import smile.feature.extraction.PCA;
+import smile.math.MathEx;
 import smile.plot.swing.PlotPanel;
+import smile.regression.RegressionTree;
+import smile.validation.ClassificationValidations;
+import smile.validation.CrossValidation;
+import smile.validation.RegressionValidations;
 
 /**
  *
@@ -102,7 +109,6 @@ public class UpdatedDataProcessor {
         if (datasets == null || datasets.isEmpty()) {
             return null;
         }
-
 
         if (datasets.size() == 1) {
             return datasets.iterator().next();
@@ -227,7 +233,7 @@ public class UpdatedDataProcessor {
         }
     }
 
-    public Dataset reduceDatasetMeasurments(Dataset updatedDs) {
+    public void reduceDatasetMeasurments(Dataset updatedDs) {
 
         //remove outliers of the data       
         PearsonsCorrelation corr = new PearsonsCorrelation();
@@ -290,7 +296,47 @@ public class UpdatedDataProcessor {
             i++;
         }
         datasetUtilities.createColumnGroup(updatedDs, "active_measurements", "", "the filtered measurments", selection);
-        return updatedDs;
+    }
+
+    public void trainDataset(TraningDataset traniningData) {
+
+        if (traniningData == null) {
+            return;
+        }
+        MassSpectrometryData msData = new MassSpectrometryData(traniningData, traniningData);
+        MathEx.setSeed(19650218); // to get repeatable results. 
+        try {
+            DecisionTree decisionTree = DecisionTree.fit(msData.formula, msData.train);//, SplitRule.GINI, maxnodes, maxdeep, nodesize);
+            DecisionTree pDecisionTree = decisionTree.prune(msData.test);
+
+            ClassificationValidations<DecisionTree> result = CrossValidation.classification(10, msData.formula, msData.train,
+                    (f, x) -> pDecisionTree);
+
+            traniningData.setDtAccurcy(result.avg.accuracy);
+            RegressionTree regressionTree = RegressionTree.fit(msData.formula, msData.train);//, maxnodes, maxdeep, nodesize);
+            //create decionMap
+
+            double[] selfPrediction = regressionTree.predict(msData.train);
+
+            int errorCount = 0;
+            for (int i = 0; i < selfPrediction.length; i++) {
+                double roundPredection = Math.round(selfPrediction[i]);
+                if (roundPredection != msData.y_reg[i]) {
+                    errorCount++;
+                }
+            }
+            double acc = (double) (msData.y_reg.length - errorCount) / (double) msData.y_reg.length;
+            acc = acc * 100.0;
+            RegressionValidations<RegressionTree> regresult = CrossValidation.regression(10, msData.formula, msData.train, (f, x) -> regressionTree);
+
+            traniningData.setRtAccurcy(acc);
+            traniningData.setRtR2(regresult.avg.r2);
+
+        } catch (Exception e) {
+            System.out.println("at error " + traniningData.getDatasetName().split("__")[0]);
+            e.printStackTrace();
+        }
+
     }
 
     public TraningDataset prepareDataToTrain(Dataset inputDatasetToTrain) {

@@ -10,6 +10,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import no.probe.uib.mgfevaluator.model.DatasetInfo;
 import no.probe.uib.mgfevaluator.model.TraningDataset;
 import no.probe.uib.mgfevaluator.model.TraningTreeResult;
 import no.probe.uib.mgfevaluator.processes.UpdatedDataProcessor;
@@ -27,81 +28,87 @@ import smile.validation.RegressionValidations;
  * @author yfa041
  */
 public class TreeComparisonsHandler {
-
+    
     private final UpdatedDataProcessor dataProcessor = new UpdatedDataProcessor();
     private final Set<Dataset> finalDataset = new HashSet();
     private final TreeMap<String, Double> dTreeAccuracy = new TreeMap<>();
     private final TreeMap<String, Double> rTreeAccuracy = new TreeMap<>();
     private final TreeMap<String, TraningTreeResult> TraningTreeResults = new TreeMap<>();
     private final DataStoreHandler dsHandler = new DataStoreHandler();
-
-    public boolean clusterTraningData(Map<String, TraningDataset> trainingDataToCluster) {
-
-        int i = 0;
-        finalDataset.clear();
-        TraningTreeResults.clear();
-        for (String str : trainingDataToCluster.keySet()) {
-            TraningTreeResults.put(str.split("__")[0], trainTree(trainingDataToCluster.get(str)));
-            System.out.println("train ds "+str);
-
-        }
-
+    
+    public boolean clusterTraningData(Set<DatasetInfo> trainingDataToCluster) {
+        
         int total = 0;
-        for (String str : trainingDataToCluster.keySet()) {
-            String ds1Name = str.split("__")[0];
-            if (ds1Name.contains("-")) {
-                i++;
-                continue;
-            }
+        int i = 0;
+        for (DatasetInfo datasetInfo : trainingDataToCluster) {
+            String ds1Name = datasetInfo.getAccession();
+//            if (ds1Name.contains("-")) {
+//                i++;
+//                continue;
+//            }
+            Dataset ds1 = null;
             int j = 0;
-            finalDataset.add(trainingDataToCluster.get(str).getSourceDataset());
-            for (String str2 : trainingDataToCluster.keySet()) {
-                String ds2Name = str2.split("__")[0];
-                if (j <= i || ds2Name.contains("-")) {
+            for (DatasetInfo datasetInfo2 : trainingDataToCluster) {
+                String ds2Name = datasetInfo2.getAccession();
+                if (j <= i ) {//|| ds2Name.contains("-")
                     j++;
                     continue;
                 }
-                System.out.println("start comparison "+ds1Name+"  vs "+ds2Name);
-
-                if (trainingDataToCluster.get(str).getSelectedFeaturesKey().equalsIgnoreCase(trainingDataToCluster.get(str2).getSelectedFeaturesKey())) {
-                   
-                    finalDataset.add(trainingDataToCluster.get(str2).getSourceDataset());
+                if(ds1Name.contains(ds2Name)|| ds2Name.contains(ds1Name)){
+                j++;
+                continue;
+                }
+                
+                if (datasetInfo.getComparable_col().equalsIgnoreCase(datasetInfo2.getComparable_col())) {
+                    if (ds1 == null) {
+                        ds1 = dsHandler.loadDataset(datasetInfo.getAccession());
+                        if (ds1 == null) {
+                            break;
+                            
+                        }
+                    }
+                    Dataset ds2 = dsHandler.loadDataset(datasetInfo2.getAccession());
+                    finalDataset.add(ds2);
+                    finalDataset.add(ds1);
                     Dataset d = dataProcessor.mergeDatasets(finalDataset);
                     dataProcessor.reduceDatasetMeasurments(d);
                     TraningDataset t = dataProcessor.prepareDataToTrain(d);
                     t.setDatasetName(ds1Name + "-" + ds2Name);
-                    TraningTreeResult result = trainTree(t);
-                    TraningTreeResult ds1Result = TraningTreeResults.get(ds1Name);
-                    TraningTreeResult ds2Result = TraningTreeResults.get(ds2Name);
-                    if ((result.getdTreeAccurcy() >= ds1Result.getdTreeAccurcy() || result.getrTreeAccurcy() >= ds1Result.getrTreeAccurcy() || result.getrTreeR2() >= ds1Result.getrTreeR2()) || (result.getdTreeAccurcy() >= ds2Result.getdTreeAccurcy() || result.getrTreeAccurcy() >= ds2Result.getrTreeAccurcy() || result.getrTreeR2() >= ds2Result.getrTreeR2())) {
-                        TraningTreeResults.put(t.getDatasetName(), result);
-                        TraningTreeResults.put(t.getDatasetName(), result);
+                    dataProcessor.trainDataset(t);
+                    
+                    if ((t.getDtAccurcy() >= datasetInfo.getDt_acc() || t.getRtAccurcy() >= datasetInfo.getRt_acc() || t.getRtR2() >= datasetInfo.getRt_r2()) || (t.getDtAccurcy() >= datasetInfo2.getDt_acc() || t.getRtAccurcy() >= datasetInfo2.getRt_acc() || t.getRtR2() >= datasetInfo.getRt_r2())) {
                         d.setName(t.getDatasetName() + "__Q exactive__" + LocalDateTime.now().toLocalDate());
                         dsHandler.storeDataset(d);
-                        System.out.println(total + " -- storing new dataset " + ds1Name + "  " + ds1Result.getdTreeAccurcy() + "  " + ds1Result.getrTreeAccurcy() + "  " + ds1Result.getrTreeR2());
-                        System.out.println(total + " -- storing new dataset " + ds2Name + "  " + ds2Result.getdTreeAccurcy() + "  " + ds2Result.getrTreeAccurcy() + "  " + ds2Result.getrTreeR2());
-                        System.out.println(total + " -- storing new dataset " + d.getName() + "  " + result.getdTreeAccurcy() + "  " + result.getrTreeAccurcy() + "  " + result.getrTreeR2());
+                        t.setDatasetName(d.getName());
+                        dsHandler.storeDatasetInformation(t);
+                        System.out.println(total + " -- storing new dataset " + ds1Name + "  " + datasetInfo.getDt_acc() + "  " + datasetInfo.getRt_acc() + "  " + datasetInfo.getRt_r2());
+                        System.out.println(total + " -- storing new dataset " + ds2Name + "  " + datasetInfo2.getDt_acc() + "  " + datasetInfo2.getRt_acc() + "  " + datasetInfo2.getRt_r2());
+                        System.out.println(total + " -- storing new dataset " + t.getDatasetName() + "  " + t.getDtAccurcy() + "  " + t.getRtAccurcy() + "  " + t.getRtR2());
                         System.out.println("---------------------------------------------------------------------------------------");
                         total++;
                     }
-                    finalDataset.remove(trainingDataToCluster.get(str2).getSourceDataset());
+                    finalDataset.remove(ds2);
+                    d = null;
+                    ds2 = null;
+                    System.gc();
                 }
-
+                
                 j++;
             }
-            finalDataset.remove(trainingDataToCluster.get(str).getSourceDataset());
+            if (ds1 != null) {
+                finalDataset.remove(ds1);
+                ds1 = null;
+                System.gc();
+            }
             i++;
         }
-
-        for (TraningTreeResult result : TraningTreeResults.values()) {
-            System.out.println("dataset " + result.getDatasetName() + "  DT " + result.getdTreeAccurcy() + "%    RT " + result.getrTreeAccurcy() + " %    " + result.getrTreeR2());
-
-        }
-
+        
+        System.out.println("done clustering ");
+        
         return true;
-
+        
     }
-
+    
     public void compareAllData(Map<Integer, Dataset> datasetMap) {
         rTreeAccuracy.clear();
         dTreeAccuracy.clear();
@@ -115,10 +122,10 @@ public class TreeComparisonsHandler {
                 }
                 finalDataset.add(ds1);
                 finalDataset.add(ds2);
-
+                
                 Dataset traningDS = dataProcessor.mergeDatasets(finalDataset);
                 TraningDataset traniningData = dataProcessor.prepareDataToTrain(traningDS);
-
+                
                 traniningData.setDatasetName(ds1.getName().split("__")[0] + "_" + ds2.getName().split("__")[0]);
                 trainTree(traniningData);
                 if (finalDataset.size() > 1) {
@@ -135,12 +142,17 @@ public class TreeComparisonsHandler {
 //        }
 
     }
-
+    
     private TraningTreeResult trainTree(TraningDataset traniningData) {
+        
+        if (traniningData == null) {
+            return null;
+        }
+        
         TraningTreeResult results = new TraningTreeResult();
         results.setDatasetName(traniningData.getDatasetName());
         results.setSourceDataset(traniningData.getSourceDataset());
-
+        
         MassSpectrometryData msData = new MassSpectrometryData(traniningData, traniningData);
 //        System.out.println("DecisionTree model");
         MathEx.setSeed(19650218); // to get repeatable results.
@@ -184,7 +196,7 @@ public class TreeComparisonsHandler {
 //            }
 
             double[] selfPrediction = regressionTree.predict(msData.train);
-
+            
             int errorCount = 0;
             for (int i = 0; i < selfPrediction.length; i++) {
                 double roundPredection = Math.round(selfPrediction[i]);
@@ -194,7 +206,7 @@ public class TreeComparisonsHandler {
             }
             double acc = (double) (msData.y_reg.length - errorCount) / (double) msData.y_reg.length;
             acc = acc * 100.0;
-
+            
             RegressionValidations<RegressionTree> regresult = CrossValidation.regression(10, msData.formula, msData.train, (f, x) -> regressionTree);
 //             System.out.println("at self calc accracy " + (acc) + " %"+regresult);
 //             System.out.println("regresult " + regresult.avg.r2);

@@ -119,7 +119,7 @@ public class APIUtilities {
                     }
                 }
                 if (!mzml.equals("") && !mzid.equals("")) {
-                    downloadedFiles.put(project.getProjectFileIdentification()+"__"+ + index, downloadDatasetFiles((project.getProjectFileIdentification() +"__"+ index), mzml, mzid));                
+                    downloadedFiles.put(project.getProjectFileIdentification()+"__"+index, downloadDatasetFiles((project.getProjectFileIdentification() +"__"+ index), mzml, mzid));                
                     index++;
                 }
             }

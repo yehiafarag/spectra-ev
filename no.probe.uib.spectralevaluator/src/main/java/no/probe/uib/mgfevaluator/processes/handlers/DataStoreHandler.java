@@ -23,6 +23,8 @@ import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import no.probe.uib.mgfevaluator.model.DatasetInfo;
+import no.probe.uib.mgfevaluator.model.TraningDataset;
 import no.probe.uib.mgfevaluator.processes.DatasetUtilities;
 import no.uib.jexpress_modularized.core.dataset.Dataset;
 import no.uib.jexpress_modularized.core.dataset.Group;
@@ -36,9 +38,170 @@ public class DataStoreHandler {
     private final String storedDataFolderURL = "src\\main\\resources\\\\traningdata";
     private final DatasetUtilities datasetUtilities = new DatasetUtilities();
     private final ExecutorService executorService;
+    public static int dsInfoLastIndex = 0;
 
     public DataStoreHandler() {
-        this.executorService = new ThreadPoolExecutor(5, 5, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+        this.executorService = new ThreadPoolExecutor(2, 5, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+    }
+
+    public Set<DatasetInfo> loadDatasetInformation() {
+        Set<String> unused = loadUnusedDatasetAccessions();
+        Set<DatasetInfo> datasetsInfo = new LinkedHashSet<>();
+        File f = new File(storedDataFolderURL, "dataset_informaton.txt");
+        if (!f.exists()) {
+            return datasetsInfo;
+        }
+        try {
+
+            CSVReader csvReader;
+            // create csvReader object passing
+            // file reader as a parameter
+            try (//              Create an object of filereader
+                    //             class with CSV file as a parameter.
+                    FileReader filereader = new FileReader(f)) {
+                // create csvReader object passing
+                // file reader as a parameter
+                csvReader = new CSVReader(filereader);
+                String[] nextRecord;
+                csvReader.readNext();
+                // we are going to read data line by line
+                int rowIndex = 0;
+                while ((nextRecord = csvReader.readNext()) != null) {
+                    DatasetInfo datasetInfo = new DatasetInfo();
+                    datasetInfo.setIndex(Integer.parseInt(nextRecord[0]));
+                    dsInfoLastIndex = datasetInfo.getIndex();
+                    datasetInfo.setAccession(nextRecord[1]);
+                    if (unused.contains(datasetInfo.getAccession())) {
+                        continue;
+                    }
+                    datasetInfo.setTechnology(nextRecord[2]);
+                    datasetInfo.setYear(Integer.parseInt(nextRecord[3]));
+                    datasetInfo.setSpect_total_num(Integer.parseInt(nextRecord[4]));
+                    datasetInfo.setIdent_num(Integer.parseInt(nextRecord[5]));
+                    datasetInfo.setUn_ident_num(Integer.parseInt(nextRecord[6]));
+                    datasetInfo.setComparable_col(nextRecord[7]);
+
+                    datasetInfo.setDt_acc(Double.parseDouble(nextRecord[8]));
+                    datasetInfo.setRt_acc(Double.parseDouble(nextRecord[9]));
+                    datasetInfo.setRt_r2(Double.parseDouble(nextRecord[10]));
+                    datasetsInfo.add(datasetInfo);
+
+                }
+            }
+            csvReader.close();
+        } catch (IOException | NumberFormatException e) {
+            e.printStackTrace();
+        }
+
+        return datasetsInfo;
+    }
+
+    public Set<String> loadUnusedDatasetAccessions() {
+        Set<String> unusedDatasetAccessions = new LinkedHashSet<>();
+        File f = new File(storedDataFolderURL, "unused_dataset.txt");
+        if (!f.exists()) {
+            return unusedDatasetAccessions;
+        }
+        try {
+
+            CSVReader csvReader;
+            // create csvReader object passing
+            // file reader as a parameter
+            try (//              Create an object of filereader
+                    //             class with CSV file as a parameter.
+                    FileReader filereader = new FileReader(f)) {
+                // create csvReader object passing
+                // file reader as a parameter
+                csvReader = new CSVReader(filereader);
+                String[] nextRecord;
+                // we are going to read data line by line
+                while ((nextRecord = csvReader.readNext()) != null) {
+                    unusedDatasetAccessions.add(nextRecord[0]);
+                }
+            }
+            csvReader.close();
+        } catch (IOException | NumberFormatException e) {
+            e.printStackTrace();
+        }
+
+        return unusedDatasetAccessions;
+
+    }
+
+    public void flagUnusedDatasets(Set<String> toRemoveFiles) {
+        File director = new File(storedDataFolderURL);
+        for (File f : director.listFiles()) {
+            if (f.getName().equalsIgnoreCase("unused_dataset.txt") || f.getName().equalsIgnoreCase("dataset_informaton.txt")) {
+                continue;
+            }
+            String fileName = f.getName().replace(".txt", "");
+            if (toRemoveFiles.contains(fileName)) {
+                storeUnusedDs(f.getName().replace(".txt", ""));
+            }
+        }
+
+    }
+
+    public void storeUnusedDs(String dsName) {
+        File fileToWrite = new File(storedDataFolderURL, "unused_dataset.txt");
+        try {
+            if (!fileToWrite.exists()) {
+                fileToWrite.createNewFile();
+            }
+            // create FileWriter object with file as parameter
+            FileWriter outputfile = new FileWriter(fileToWrite, true);
+            try ( // create CSVWriter object filewriter object as parameter
+                    CSVWriter writer = new CSVWriter(outputfile)) {
+                writer.writeNext(new String[]{dsName});
+            };
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+    }
+
+    public void storeDatasetInformation(TraningDataset tds) {
+        File fileToWrite = new File(storedDataFolderURL, "dataset_informaton.txt");
+
+        try {
+            boolean addHeader = false;
+            if (!fileToWrite.exists()) {
+                fileToWrite.createNewFile();
+                addHeader = true;
+            }
+            // create FileWriter object with file as parameter
+            FileWriter outputfile = new FileWriter(fileToWrite, true);
+
+            try ( // create CSVWriter object filewriter object as parameter
+                    CSVWriter writer = new CSVWriter(outputfile)) {
+
+                // adding header to csv
+                if (addHeader) {
+                    String[] header = new String[]{"index", "accession", "technology", "year", "spect_total_num", "ident_num", "un_ident_num", "comparable_col", "dt_acc", "rt_acc", "rt_r2"};
+                    writer.writeNext(header);
+                }
+
+                int idnum = 0;
+                int unIdnum = 0;
+                for (Group g : tds.getSourceDataset().getRowGroups()) {
+                    if (g.getName().equalsIgnoreCase("Identified")) {
+                        idnum = g.getMembers().length;
+                    } else if (g.getName().equalsIgnoreCase("UnIdentified")) {
+                        unIdnum = g.getMembers().length;
+                    }
+                }
+                String[] row = new String[]{(dsInfoLastIndex + 1) + "", tds.getDatasetName().split("__")[0], tds.getDatasetName().split("__")[1], tds.getDatasetName().split("__")[2].split("-")[0], tds.getSourceDataset().getDataLength() + "", idnum + "", unIdnum + "", tds.getSelectedFeaturesKey(), tds.getDtAccurcy() + "", tds.getRtAccurcy() + "", tds.getRtR2() + ""};
+                writer.writeNext(row);
+                dsInfoLastIndex++;
+                // closing writer connection
+//                writer.close();
+//                outputfile.close();
+            }
+        } catch (IOException ex) {
+            fileToWrite.delete();
+            ex.printStackTrace();
+        }
+
     }
 
     public Set<Dataset> loadStoredData() {
@@ -73,6 +236,18 @@ public class DataStoreHandler {
         System.out.println("done filling data");
 
         return datasets;
+    }
+
+    public Dataset loadDataset(String datasetName) {
+        File director = new File(storedDataFolderURL);
+        for (File f : director.listFiles()) {
+            if (f.getName().equalsIgnoreCase(datasetName + ".txt")) {
+                return parseDatasetFile(f);
+            }
+
+        }
+        return null;
+
     }
 
     private Dataset parseDatasetFile(File f) {
@@ -134,6 +309,9 @@ public class DataStoreHandler {
                         break;
                     }
                 }
+                filereader.close();
+                csvReader.close();
+                System.gc();
 
                 dataset.setName(f.getName().replace(".txt", ""));
                 return dataset;
@@ -148,10 +326,6 @@ public class DataStoreHandler {
     }
 
     public boolean checkDataExisted(String fileName) {
-        File fileToWrite = new File(storedDataFolderURL, fileName);
-        if (fileToWrite.exists()) {
-            return true;
-        }
         File director = new File(storedDataFolderURL);
         for (File f : director.listFiles()) {
             if (f.getName().contains(fileName)) {
@@ -163,7 +337,7 @@ public class DataStoreHandler {
     }
 
     public boolean storeDataset(Dataset ds) {
-        File fileToWrite = new File(storedDataFolderURL, ds.getName() + ".txt");
+        File fileToWrite = new File(storedDataFolderURL, ds.getName().split("__")[0] + ".txt");
         try {
             if (fileToWrite.exists()) {
                 return false;
